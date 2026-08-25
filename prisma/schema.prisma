@@ -1,0 +1,109 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  phone     String
+  role      String   @default("SENIOR_BROKER") // ADMIN, AGENCY_HEAD, SENIOR_BROKER, FIELD_AGENT
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  leads      Lead[]
+  properties Property[]
+  deals      Deal[]
+}
+
+model Property {
+  id               String   @id @default(uuid())
+  title            String
+  locality         String
+  city             String
+  state            String   @default("Maharashtra")
+  type             String   @default("BHK_2") // BHK_1, BHK_2, BHK_3, BHK_4, PENTHOUSE, VILLA, COMMERCIAL
+  reraNumber       String   @unique
+  carpetAreaSqFt   Float
+  priceInLakhs     Float    // e.g. 75.5 = ₹75.5 Lakhs, 250 = ₹2.5 Cr
+  priceInRupees    Float    // e.g. 7550000
+  possessionStatus String   @default("READY_TO_MOVE") // READY_TO_MOVE, UNDER_CONSTRUCTION, NEW_LAUNCH, RESALE
+  imageUrl         String
+  bedrooms         Int      @default(2)
+  bathrooms        Int      @default(2)
+  description      String?
+  amenities        String   // Comma-separated list e.g. "Clubhouse, Gym, Swimming Pool, Security"
+  isFeatured       Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  agentId    String?
+  agent      User?      @relation(fields: [agentId], references: [id])
+  leads      Lead[]
+  deals      Deal[]
+  activities Activity[]
+}
+
+model Lead {
+  id                String   @id @default(uuid())
+  clientName        String
+  contactNumber     String   // Formatted +91 for WhatsApp link
+  email             String?
+  budgetMinLakhs    Float
+  budgetMaxLakhs    Float
+  preferredLocality String
+  preferredType     String   @default("BHK_2")
+  buyingIntent      String   @default("SELF_USE") // SELF_USE, INVESTMENT, END_USER_REPLACEMENT
+  stage             String   @default("NEW_INQUIRY") // NEW_INQUIRY, SITE_VISIT_SCHEDULED, SITE_VISIT_COMPLETED, NEGOTIATION, TOKEN_PAID, CLOSED_WON
+  notes             String?
+  source            String   @default("Website Inquiry")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  assignedAgentId String?
+  assignedAgent   User?      @relation(fields: [assignedAgentId], references: [id])
+  propertyId      String?
+  property        Property?  @relation(fields: [propertyId], references: [id])
+  deals           Deal[]
+  activities      Activity[]
+}
+
+model Deal {
+  id             String    @id @default(uuid())
+  title          String
+  dealValueINR   Float
+  tokenPaidINR   Float     @default(0)
+  stampDutyINR   Float     @default(0)
+  gstINR         Float     @default(0)
+  expectedClose  DateTime?
+  stage          String    @default("NEGOTIATION")
+  createdAt      DateTime  @default(now())
+
+  leadId     String
+  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  brokerId   String?
+  broker     User?    @relation(fields: [brokerId], references: [id])
+}
+
+model Activity {
+  id          String   @id @default(uuid())
+  type        String   // "SITE_VISIT", "WHATSAPP", "CALL", "NOTE"
+  title       String
+  description String?
+  scheduledAt DateTime?
+  isCompleted Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  leadId     String?
+  lead       Lead?     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  propertyId String?
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+}

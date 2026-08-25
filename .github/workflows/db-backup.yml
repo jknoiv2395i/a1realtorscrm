@@ -1,0 +1,155 @@
+# =============================================================================
+# A1 Real Estate CRM — Automated Daily Database Backup
+# GitHub Actions Workflow
+# =============================================================================
+# Schedule: Daily at 02:00 AM IST (20:30 UTC previous day)
+# Trigger:  Cron schedule + manual workflow_dispatch
+# Secrets required (set in GitHub → Settings → Secrets → Actions):
+#   DATABASE_URL   → Full Supabase PostgreSQL connection string
+# =============================================================================
+
+name: 🛡️ A1 CRM — Daily Database Backup
+
+on:
+  schedule:
+    # 02:00 AM IST = 20:30 UTC (Indian Standard Time is UTC+5:30)
+    - cron: '30 20 * * *'
+
+  # Allow manual trigger from the GitHub Actions UI
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for manual backup trigger'
+        required: false
+        default: 'Manual ad-hoc backup'
+
+env:
+  NODE_VERSION: '20.x'
+  RETENTION_DAYS: '14'
+
+jobs:
+  # ── Job 1: Backup ──────────────────────────────────────────────────────────
+  backup:
+    name: 📦 Snapshot & Compress Supabase DB
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: ⬇️ Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🐘 Install PostgreSQL Client Tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client
+          pg_dump --version
+
+      - name: 🕐 Generate Backup Timestamp
+        id: timestamp
+        run: |
+          TS=$(date -u +"%Y%m%d_%H%M%S")
+          echo "ts=$TS" >> "$GITHUB_OUTPUT"
+          echo "filename=a1_crm_backup_${TS}.sql.gz" >> "$GITHUB_OUTPUT"
+          echo "Backup filename: a1_crm_backup_${TS}.sql.gz"
+
+      - name: 📂 Create Backup Directory
+        run: mkdir -p backups logs
+
+      - name: 🔄 Run pg_dump and Compress
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          # Parse connection string components
+          DB_USER=$(echo "$DATABASE_URL" | sed -n 's|.*://\([^:]*\):.*|\1|p')
+          DB_HOST=$(echo "$DATABASE_URL" | sed -n 's|.*@\([^:]*\):.*|\1|p')
+          DB_PORT=$(echo "$DATABASE_URL" | sed -n 's|.*:\([0-9]*\)/.*|\1|p')
+          DB_NAME=$(echo "$DATABASE_URL" | sed -n 's|.*/\([^?]*\).*|\1|p')
+          DB_PASS=$(echo "$DATABASE_URL" | sed -n 's|.*://[^:]*:\([^@]*\)@.*|\1|p')
+
+          echo "🔌 Connecting to: $DB_HOST:$DB_PORT/$DB_NAME"
+
+          PGPASSWORD="$DB_PASS" pg_dump \
+            --host="$DB_HOST" \
+            --port="$DB_PORT" \
+            --username="$DB_USER" \
+            --dbname="$DB_NAME" \
+            --format=plain \
+            --no-password \
+            --schema=public \
+          | gzip -9 > "backups/${{ steps.timestamp.outputs.filename }}"
+
+          # Verify file exists and is non-empty
+          if [[ ! -s "backups/${{ steps.timestamp.outputs.filename }}" ]]; then
+            echo "❌ Backup file is empty — aborting!"
+            exit 1
+          fi
+
+          echo "✅ pg_dump completed successfully"
+          ls -lh "backups/${{ steps.timestamp.outputs.filename }}"
+
+      - name: 🔐 Generate SHA-256 Checksum
+        run: |
+          cd backups
+          sha256sum "${{ steps.timestamp.outputs.filename }}" > "${{ steps.timestamp.outputs.filename }}.sha256"
+          echo "Checksum: $(cat "${{ steps.timestamp.outputs.filename }}.sha256")"
+
+      - name: 📊 Backup File Stats
+        run: |
+          FILE="backups/${{ steps.timestamp.outputs.filename }}"
+          SIZE=$(du -sh "$FILE" | cut -f1)
+          LINES=$(zcat "$FILE" | wc -l)
+          echo "📦 File:  ${{ steps.timestamp.outputs.filename }}"
+          echo "📏 Size:  $SIZE"
+          echo "📄 Lines: $LINES (uncompressed SQL lines)"
+
+      - name: 📝 Write Backup Manifest
+        run: |
+          SIZE=$(du -sh "backups/${{ steps.timestamp.outputs.filename }}" | cut -f1)
+          echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] BACKUP OK | file=${{ steps.timestamp.outputs.filename }} | size=${SIZE} | run_id=${{ github.run_id }} | trigger=${{ github.event_name }}" >> backups/backup_manifest.log
+          cat backups/backup_manifest.log | tail -5
+
+      - name: ☁️ Upload Backup as GitHub Actions Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ steps.timestamp.outputs.ts }}
+          path: |
+            backups/${{ steps.timestamp.outputs.filename }}
+            backups/${{ steps.timestamp.outputs.filename }}.sha256
+          retention-days: ${{ env.RETENTION_DAYS }}
+          if-no-files-found: error
+
+      - name: ✅ Backup Success Summary
+        run: |
+          echo ""
+          echo "════════════════════════════════════════════════════"
+          echo "  ✅ A1 CRM Database Backup — SUCCESS"
+          echo "════════════════════════════════════════════════════"
+          echo "  File:      ${{ steps.timestamp.outputs.filename }}"
+          echo "  Retained:  ${{ env.RETENTION_DAYS }} days via Actions artifacts"
+          echo "  Run ID:    ${{ github.run_id }}"
+          echo "  Triggered: ${{ github.event_name }}"
+          echo "════════════════════════════════════════════════════"
+
+  # ── Job 2: Notify on failure ───────────────────────────────────────────────
+  notify-failure:
+    name: 🚨 Alert on Backup Failure
+    runs-on: ubuntu-latest
+    needs: backup
+    if: failure()
+
+    steps:
+      - name: 🚨 Report Backup Failure
+        run: |
+          echo "════════════════════════════════════════════════════"
+          echo "  ❌ A1 CRM DATABASE BACKUP FAILED"
+          echo "════════════════════════════════════════════════════"
+          echo "  Run ID:    ${{ github.run_id }}"
+          echo "  Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "  Action:    Check logs at https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo ""
+          echo "  ⚠️  IMMEDIATE ACTION REQUIRED:"
+          echo "  1. Verify DATABASE_URL secret is still valid"
+          echo "  2. Check Supabase project status at supabase.com/dashboard"
+          echo "  3. Re-run manually: workflow_dispatch"
+          echo "════════════════════════════════════════════════════"
+          exit 1   # Mark the notify job as failed too for visibility

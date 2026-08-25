@@ -1,0 +1,48 @@
+# Node & dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Next.js build output
+.next/
+out/
+build/
+dist/
+
+# Git & GitHub
+.git/
+.gitignore
+.github/
+
+# Environment files & secrets
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+
+# Database local dev & backups
+prisma/dev.db
+prisma/dev.db-journal
+backups/
+logs/
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Documentation & Scratch
+README.md
+walkthrough.md
+implementation_plan.md
