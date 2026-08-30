@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Lead, MOCK_LEADS, PIPELINE_STAGES } from '@/lib/mock-data';
 import { formatPriceInLakhs, generateWhatsAppLink } from '@/lib/formatters';
 import { LeadModal } from './lead-modal';
@@ -25,9 +25,75 @@ interface LeadPipelineProps {
   setIsAddLeadOpen: (open: boolean) => void;
 }
 
-export function LeadPipeline({ searchQuery, isAddLeadOpen, setIsAddLeadOpen }: LeadPipelineProps) {
+export function LeadPipeline({
+  searchQuery,
+  isAddLeadOpen,
+  setIsAddLeadOpen,
+}: LeadPipelineProps) {
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
   const [leads, setLeads] = useState<Lead[]>(MOCK_LEADS);
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  // Fetch leads from Google Sheets API
+  useEffect(() => {
+    async function loadLeads() {
+      try {
+        setIsLoading(true);
+        const res = await fetch('/api/leads');
+        const data = await res.json();
+        if (data.success && data.leads && data.leads.length > 0) {
+          setLeads(data.leads);
+        }
+      } catch (err) {
+        console.warn('Using default lead data:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadLeads();
+  }, []);
+
+  const handleDragStart = (e: React.DragEvent, leadId: string) => {
+    e.dataTransfer.setData('leadId', leadId);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetStage: Lead['stage']) => {
+    e.preventDefault();
+    const leadId = e.dataTransfer.getData('leadId');
+    if (!leadId) return;
+
+    setLeads((prev) =>
+      prev.map((l) => (l.id === leadId ? { ...l, stage: targetStage } : l))
+    );
+
+    try {
+      await fetch('/api/leads', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId, stage: targetStage }),
+      });
+    } catch (err) {
+      console.error('Failed to update stage on Google Sheet:', err);
+    }
+  };
+
+  const handleAddLead = async (newLead: Lead) => {
+    setLeads((prev) => [newLead, ...prev]);
+    try {
+      await fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newLead),
+      });
+    } catch (err) {
+      console.error('Failed to post lead to Google Sheet:', err);
+    }
+  };
 
   // Filter leads by search query
   const filteredLeads = leads.filter((lead) => {
@@ -41,7 +107,7 @@ export function LeadPipeline({ searchQuery, isAddLeadOpen, setIsAddLeadOpen }: L
   });
 
   // Handle stage change (Simulating drag or quick stage bump)
-  const handleMoveStage = (leadId: string, currentStage: string) => {
+  const handleMoveStage = async (leadId: string, currentStage: string) => {
     const stageOrder = PIPELINE_STAGES.map((s) => s.id);
     const currentIndex = stageOrder.indexOf(currentStage);
     if (currentIndex < stageOrder.length - 1) {

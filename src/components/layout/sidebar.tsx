@@ -24,7 +24,6 @@ interface SidebarProps {
 export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
   const menuItems = [
     { id: 'dashboard', label: 'Executive Dashboard', icon: TrendingUp, badge: null },
-    { id: 'inventory', label: 'Property Inventory', icon: Building2, badge: 'RERA' },
     { id: 'pipeline', label: 'Lead & Pipeline Kanban', icon: Kanban, badge: 'Hot' },
     { id: 'calculator', label: 'Stamp Duty & GST Calc', icon: Calculator, badge: 'Tax' },
     { id: 'activities', label: 'Site Visits & Follow-ups', icon: Calendar, badge: '4 Today' },

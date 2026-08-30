@@ -161,19 +161,49 @@ export function IndianTaxCalculator() {
           </div>
 
           {/* Grand Total All-In Cost Footer */}
-          <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
+          <div className="pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
             <div>
               <span className="text-xs text-slate-400 font-semibold uppercase">Total Outflow (Buyer Acquisition Cost)</span>
               <p className="text-2xl font-black gold-gradient-text mt-0.5">{formatINR(tax.totalAcquisitionCost)}</p>
             </div>
 
-            <button
-              onClick={() => alert(`Client cost sheet for ${formatINR(tax.totalAcquisitionCost)} generated successfully!`)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gold-500 text-slateDark-950 font-bold hover:bg-gold-400 transition-colors shadow-xl text-xs"
-            >
-              <Download className="w-4 h-4" />
-              <span>Download Cost Sheet PDF</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await fetch('/api/docs', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        title: `Cost Sheet - ${formatINR(tax.agreementValue)} (${stateName})`,
+                        replacements: {
+                          Client_Name: 'Valued Client',
+                          State_Name: stateName,
+                          Agreement_Value: formatINR(tax.agreementValue),
+                          Stamp_Duty: formatINR(tax.stampDutyAmount),
+                          GST_Amount: formatINR(tax.gstAmount),
+                          Registration_Fee: formatINR(tax.registrationFee),
+                          Total_Cost: formatINR(tax.totalAcquisitionCost),
+                          Date: new Date().toLocaleDateString('en-IN'),
+                        },
+                      }),
+                    });
+                    const data = await res.json();
+                    if (data.url) {
+                      window.open(data.url, '_blank');
+                    } else {
+                      alert(`Cost sheet calculated: ${formatINR(tax.totalAcquisitionCost)}.\n(Configure Google Doc Template ID in .env.local to open directly in Google Docs)`);
+                    }
+                  } catch (e) {
+                    alert(`Cost sheet calculated: ${formatINR(tax.totalAcquisitionCost)}`);
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gold-500 text-slateDark-950 font-bold hover:bg-gold-400 transition-colors shadow-xl text-xs"
+              >
+                <FileCheck className="w-4 h-4" />
+                <span>Create Google Doc Cost Sheet</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

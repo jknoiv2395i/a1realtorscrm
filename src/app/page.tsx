@@ -6,7 +6,6 @@ import { Header } from '@/components/layout/header';
 import { SummaryCards } from '@/components/dashboard/summary-cards';
 import { ChartsSection } from '@/components/dashboard/charts-section';
 import { ActivityFeed } from '@/components/dashboard/activity-feed';
-import { PropertyInventory } from '@/components/inventory/property-inventory';
 import { LeadPipeline } from '@/components/leads/lead-pipeline';
 import { IndianTaxCalculator } from '@/components/compliance/indian-tax-calculator';
 import { ActivitiesView } from '@/components/activities/activities-view';
@@ -23,21 +22,10 @@ export default function Home() {
 
   // Modal open states
   const [isAddLeadOpen, setIsAddLeadOpen] = useState<boolean>(false);
-  const [isAddPropertyOpen, setIsAddPropertyOpen] = useState<boolean>(false);
   const [isScheduleVisitOpen, setIsScheduleVisitOpen] = useState<boolean>(false);
-
-  // Handlers for adding data dynamically
-  const handleAddProperty = (newProp: Property) => {
-    setProperties((prev) => [newProp, ...prev]);
-  };
 
   const handleAddActivity = (newAct: Activity) => {
     setActivities((prev) => [newAct, ...prev]);
-  };
-
-  const handleOpenAddProperty = () => {
-    setActiveTab('inventory');
-    setIsAddPropertyOpen(true);
   };
 
   const handleOpenScheduleVisit = () => {
@@ -64,7 +52,6 @@ export default function Home() {
           selectedCity={selectedCity}
           setSelectedCity={setSelectedCity}
           onOpenAddLead={() => setIsAddLeadOpen(true)}
-          onOpenAddProperty={handleOpenAddProperty}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
         />
@@ -84,19 +71,6 @@ export default function Home() {
               <ChartsSection />
 
               <ActivityFeed />
-            </div>
-          )}
-
-          {activeTab === 'inventory' && (
-            <div className="animate-in fade-in duration-300">
-              <PropertyInventory
-                properties={properties}
-                onAddProperty={handleAddProperty}
-                isAddPropertyOpen={isAddPropertyOpen}
-                setIsAddPropertyOpen={setIsAddPropertyOpen}
-                searchQuery={searchQuery}
-                selectedCity={selectedCity}
-              />
             </div>
           )}
 

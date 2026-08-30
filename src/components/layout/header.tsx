@@ -7,7 +7,6 @@ interface HeaderProps {
   selectedCity: string;
   setSelectedCity: (city: string) => void;
   onOpenAddLead: () => void;
-  onOpenAddProperty: () => void;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
 }
@@ -16,7 +15,6 @@ export function Header({
   selectedCity,
   setSelectedCity,
   onOpenAddLead,
-  onOpenAddProperty,
   searchQuery,
   setSearchQuery,
 }: HeaderProps) {
@@ -88,14 +86,6 @@ export function Header({
           >
             <Plus className="w-3.5 h-3.5 stroke-[3]" />
             <span>Add Lead</span>
-          </button>
-
-          <button
-            onClick={onOpenAddProperty}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 text-xs font-semibold transition-all"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Add Property</span>
           </button>
         </div>
       </div>
