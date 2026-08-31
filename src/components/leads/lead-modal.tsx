@@ -1,15 +1,20 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Lead } from '@/lib/mock-data';
-import { X, User, Phone, Mail, MapPin, IndianRupee, Briefcase, PlusCircle } from 'lucide-react';
+import { X, User, Phone, Mail, MapPin, IndianRupee, Briefcase, PlusCircle, Loader2 } from 'lucide-react';
 
 interface LeadModalProps {
   onClose: () => void;
-  onSave: (newLead: Partial<Lead>) => void;
+  onSave: (newLead: Lead) => void;
 }
 
 export function LeadModal({ onClose, onSave }: LeadModalProps) {
+  const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
   const [formData, setFormData] = useState<Partial<Lead>>({
     clientName: '',
     contactNumber: '+91 ',
@@ -24,11 +29,37 @@ export function LeadModal({ onClose, onSave }: LeadModalProps) {
     notes: '',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.clientName || !formData.contactNumber) return;
-    onSave(formData);
-    onClose();
+
+    setIsSubmitting(true);
+    setErrorMessage('');
+
+    try {
+      const res = await fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await res.json();
+
+      if (res.status === 201 || data.success) {
+        if (data.lead) {
+          onSave(data.lead);
+        }
+        router.refresh();
+        onClose();
+      } else {
+        setErrorMessage(data.error || 'Failed to create lead in database');
+      }
+    } catch (err) {
+      console.error('LeadModal POST Error:', err);
+      setErrorMessage('Failed to connect to database API');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -46,6 +77,12 @@ export function LeadModal({ onClose, onSave }: LeadModalProps) {
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {errorMessage && (
+          <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold">
+            {errorMessage}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -137,15 +174,24 @@ export function LeadModal({ onClose, onSave }: LeadModalProps) {
             <button
               type="button"
               onClick={onClose}
+              disabled={isSubmitting}
               className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-lg bg-gold-500 text-slateDark-950 font-bold hover:bg-gold-400 transition-colors shadow-lg"
+              disabled={isSubmitting}
+              className="flex items-center gap-2 px-5 py-2 rounded-lg bg-gold-500 text-slateDark-950 font-bold hover:bg-gold-400 transition-colors shadow-lg disabled:opacity-50"
             >
-              Save Lead
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Saving to Database...</span>
+                </>
+              ) : (
+                <span>Save Lead</span>
+              )}
             </button>
           </div>
         </form>

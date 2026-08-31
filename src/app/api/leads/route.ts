@@ -1,26 +1,96 @@
 import { NextResponse } from 'next/server';
-import { fetchLeadsFromSheet, appendLeadToSheet, updateLeadStageInSheet } from '@/lib/google-sheets';
-import { Lead } from '@/lib/mock-data';
+import { prisma } from '@/lib/prisma';
+import { appendLeadToSheet, updateLeadStageInSheet } from '@/lib/google-sheets';
 
 export async function GET() {
   try {
-    const leads = await fetchLeadsFromSheet();
-    return NextResponse.json({ success: true, leads });
+    const dbLeads = await prisma.lead.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        property: {
+          select: { title: true },
+        },
+      },
+    });
+
+    const formattedLeads = dbLeads.map((lead) => ({
+      ...lead,
+      createdAt: lead.createdAt.toISOString(),
+      propertyTitle: lead.property?.title || undefined,
+    }));
+
+    return NextResponse.json({ success: true, leads: formattedLeads });
   } catch (error) {
+    console.error('API GET /api/leads Error:', error);
     return NextResponse.json({ success: false, error: 'Failed to fetch leads' }, { status: 500 });
   }
 }
 
 export async function POST(req: Request) {
   try {
-    const body: Lead = await req.json();
-    if (!body.id) {
-      body.id = `lead-${Date.now()}`;
+    const body = await req.json();
+    const {
+      clientName,
+      contactNumber,
+      email,
+      budgetMinLakhs,
+      budgetMaxLakhs,
+      preferredLocality,
+      preferredType,
+      buyingIntent,
+      stage,
+      notes,
+      source,
+    } = body;
+
+    if (!clientName || !contactNumber) {
+      return NextResponse.json(
+        { success: false, error: 'Client Name and Contact Number are required' },
+        { status: 400 }
+      );
     }
-    await appendLeadToSheet(body);
-    return NextResponse.json({ success: true, lead: body });
+
+    const createdLead = await prisma.lead.create({
+      data: {
+        clientName,
+        contactNumber,
+        email: email || null,
+        budgetMinLakhs: Number(budgetMinLakhs) || 50,
+        budgetMaxLakhs: Number(budgetMaxLakhs) || 100,
+        preferredLocality: preferredLocality || 'Mumbai',
+        preferredType: preferredType || 'BHK_2',
+        buyingIntent: buyingIntent || 'SELF_USE',
+        stage: stage || 'NEW_INQUIRY',
+        notes: notes || null,
+        source: source || 'Website Inquiry',
+      },
+    });
+
+    // Optional background Google Sheets sync if configured
+    try {
+      await appendLeadToSheet({
+        ...createdLead,
+        createdAt: createdLead.createdAt.toISOString(),
+        buyingIntent: createdLead.buyingIntent as any,
+        stage: createdLead.stage as any,
+        preferredType: createdLead.preferredType as any,
+        email: createdLead.email || undefined,
+        notes: createdLead.notes || undefined,
+        propertyId: createdLead.propertyId || undefined,
+      });
+    } catch (sheetErr) {
+      console.warn('Google Sheets sync skipped:', sheetErr);
+    }
+
+    const formattedLead = {
+      ...createdLead,
+      createdAt: createdLead.createdAt.toISOString(),
+    };
+
+    return NextResponse.json({ success: true, lead: formattedLead }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ success: false, error: 'Failed to create lead' }, { status: 500 });
+    console.error('API POST /api/leads Error:', error);
+    return NextResponse.json({ success: false, error: 'Failed to create lead in database' }, { status: 500 });
   }
 }
 
@@ -30,9 +100,21 @@ export async function PATCH(req: Request) {
     if (!leadId || !stage) {
       return NextResponse.json({ success: false, error: 'Missing leadId or stage' }, { status: 400 });
     }
-    await updateLeadStageInSheet(leadId, stage);
-    return NextResponse.json({ success: true, leadId, stage });
+
+    const updatedLead = await prisma.lead.update({
+      where: { id: leadId },
+      data: { stage },
+    });
+
+    try {
+      await updateLeadStageInSheet(leadId, stage);
+    } catch (sheetErr) {
+      console.warn('Google Sheets stage update skipped:', sheetErr);
+    }
+
+    return NextResponse.json({ success: true, leadId, stage, lead: updatedLead });
   } catch (error) {
-    return NextResponse.json({ success: false, error: 'Failed to update lead' }, { status: 500 });
+    console.error('API PATCH /api/leads Error:', error);
+    return NextResponse.json({ success: false, error: 'Failed to update lead stage' }, { status: 500 });
   }
 }

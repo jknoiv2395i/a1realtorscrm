@@ -118,23 +118,8 @@ export function LeadPipeline({
     }
   };
 
-  const handleAddNewLead = (newLeadData: Partial<Lead>) => {
-    const created: Lead = {
-      id: `lead-${Date.now()}`,
-      clientName: newLeadData.clientName || 'New Client',
-      contactNumber: newLeadData.contactNumber || '+91 98200 00000',
-      email: newLeadData.email || '',
-      budgetMinLakhs: newLeadData.budgetMinLakhs || 50,
-      budgetMaxLakhs: newLeadData.budgetMaxLakhs || 100,
-      preferredLocality: newLeadData.preferredLocality || 'Mumbai Central',
-      preferredType: newLeadData.preferredType || 'BHK_2',
-      buyingIntent: newLeadData.buyingIntent || 'SELF_USE',
-      stage: 'NEW_INQUIRY',
-      source: 'Website Form',
-      createdAt: new Date().toISOString().split('T')[0],
-      notes: newLeadData.notes || '',
-    };
-    setLeads([created, ...leads]);
+  const handleAddNewLead = (savedLead: Lead) => {
+    setLeads((prev) => [savedLead, ...prev.filter((l) => l.id !== savedLead.id)]);
   };
 
   return (
