@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Lead, MOCK_LEADS, PIPELINE_STAGES } from '@/lib/mock-data';
+import { Lead, PIPELINE_STAGES } from '@/lib/mock-data';
 import { formatPriceInLakhs, generateWhatsAppLink } from '@/lib/formatters';
 import { LeadModal } from './lead-modal';
 import { 
@@ -31,11 +31,11 @@ export function LeadPipeline({
   setIsAddLeadOpen,
 }: LeadPipelineProps) {
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
-  const [leads, setLeads] = useState<Lead[]>(MOCK_LEADS);
+  const [leads, setLeads] = useState<Lead[]>([]);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  // Fetch leads from Google Sheets API
+  // Fetch leads from Google Sheets / API
   useEffect(() => {
     async function loadLeads() {
       try {
@@ -46,7 +46,7 @@ export function LeadPipeline({
           setLeads(data.leads);
         }
       } catch (err) {
-        console.warn('Using default lead data:', err);
+        console.warn('Unable to load leads from API:', err);
       } finally {
         setIsLoading(false);
       }
@@ -266,8 +266,9 @@ export function LeadPipeline({
                     ))}
 
                     {stageLeads.length === 0 && (
-                      <div className="py-8 text-center border border-dashed border-slate-800 rounded-xl">
-                        <p className="text-[11px] text-slate-500">No leads in stage</p>
+                      <div className="py-8 px-2 text-center border border-dashed border-slate-800 rounded-xl space-y-2">
+                        <p className="text-[11px] font-semibold text-slate-400">No leads in stage</p>
+                        <p className="text-[10px] text-slate-500">Click &apos;+ Add Lead&apos; to create an inquiry</p>
                       </div>
                     )}
                   </div>
@@ -293,37 +294,46 @@ export function LeadPipeline({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 text-slate-200">
-                {filteredLeads.map((lead) => (
-                  <tr key={lead.id} className="hover:bg-slate-800/40 transition-colors">
-                    <td className="p-4 font-bold text-slate-100">{lead.clientName}</td>
-                    <td className="p-4 font-mono text-slate-300">{lead.contactNumber}</td>
-                    <td className="p-4 font-extrabold text-gold-400">
-                      {formatPriceInLakhs(lead.budgetMinLakhs)} - {formatPriceInLakhs(lead.budgetMaxLakhs)}
-                    </td>
-                    <td className="p-4">{lead.preferredLocality}</td>
-                    <td className="p-4">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        lead.buyingIntent === 'INVESTMENT' ? 'bg-indigo-500/20 text-indigo-300' : 'bg-emerald-500/20 text-emerald-300'
-                      }`}>
-                        {lead.buyingIntent}
-                      </span>
-                    </td>
-                    <td className="p-4 font-semibold text-slate-300">
-                      {lead.stage.replace(/_/g, ' ')}
-                    </td>
-                    <td className="p-4 text-right">
-                      <a
-                        href={generateWhatsAppLink(lead.contactNumber, lead.clientName, lead.propertyTitle)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-slateDark-950 font-bold transition-all text-[11px]"
-                      >
-                        <MessageSquare className="w-3 h-3" />
-                        WhatsApp
-                      </a>
+                {filteredLeads.length > 0 ? (
+                  filteredLeads.map((lead) => (
+                    <tr key={lead.id} className="hover:bg-slate-800/40 transition-colors">
+                      <td className="p-4 font-bold text-slate-100">{lead.clientName}</td>
+                      <td className="p-4 font-mono text-slate-300">{lead.contactNumber}</td>
+                      <td className="p-4 font-extrabold text-gold-400">
+                        {formatPriceInLakhs(lead.budgetMinLakhs)} - {formatPriceInLakhs(lead.budgetMaxLakhs)}
+                      </td>
+                      <td className="p-4">{lead.preferredLocality}</td>
+                      <td className="p-4">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          lead.buyingIntent === 'INVESTMENT' ? 'bg-indigo-500/20 text-indigo-300' : 'bg-emerald-500/20 text-emerald-300'
+                        }`}>
+                          {lead.buyingIntent}
+                        </span>
+                      </td>
+                      <td className="p-4 font-semibold text-slate-300">
+                        {lead.stage.replace(/_/g, ' ')}
+                      </td>
+                      <td className="p-4 text-right">
+                        <a
+                          href={generateWhatsAppLink(lead.contactNumber, lead.clientName, lead.propertyTitle)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-slateDark-950 font-bold transition-all text-[11px]"
+                        >
+                          <MessageSquare className="w-3 h-3" />
+                          WhatsApp
+                        </a>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="p-12 text-center text-slate-400">
+                      <p className="text-sm font-bold text-slate-300">No buyer inquiries found</p>
+                      <p className="text-xs text-slate-500 mt-1">Click &apos;+ Add Lead&apos; above to record your first client prospect.</p>
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>

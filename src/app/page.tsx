@@ -9,16 +9,17 @@ import { ActivityFeed } from '@/components/dashboard/activity-feed';
 import { LeadPipeline } from '@/components/leads/lead-pipeline';
 import { IndianTaxCalculator } from '@/components/compliance/indian-tax-calculator';
 import { ActivitiesView } from '@/components/activities/activities-view';
-import { MOCK_PROPERTIES, MOCK_LEADS, MOCK_ACTIVITIES, Property, Activity } from '@/lib/mock-data';
+import { Property, Activity, Lead } from '@/lib/mock-data';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [selectedCity, setSelectedCity] = useState<string>('All India');
   const [searchQuery, setSearchQuery] = useState<string>('');
   
-  // Central interactive state for properties and site visits / activities
-  const [properties, setProperties] = useState<Property[]>(MOCK_PROPERTIES);
-  const [activities, setActivities] = useState<Activity[]>(MOCK_ACTIVITIES);
+  // Central interactive state initialized empty for clean production launch
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [leads, setLeads] = useState<Lead[]>([]);
 
   // Modal open states
   const [isAddLeadOpen, setIsAddLeadOpen] = useState<boolean>(false);
@@ -33,12 +34,18 @@ export default function Home() {
     setIsScheduleVisitOpen(true);
   };
 
-  // Compute live portfolio metrics from properties state
+  const handleOpenAddLead = () => {
+    setActiveTab('pipeline');
+    setIsAddLeadOpen(true);
+  };
+
+  // Compute live portfolio metrics dynamically from state
   const totalPortfolioValueINR = properties.reduce((acc, p) => acc + p.priceInRupees, 0);
-  const activeLeadsCount = MOCK_LEADS.length;
+  const activeLeadsCount = leads.length;
   const siteVisitsCount = activities.filter((a) => a.type === 'SITE_VISIT').length;
-  const closedDealsCount = 1;
-  const closedValueINR = 48500000; // ₹4.85 Cr
+  const closedDeals = leads.filter((l) => l.stage === 'CLOSED_WON');
+  const closedDealsCount = closedDeals.length;
+  const closedValueINR = closedDeals.reduce((acc, l) => acc + (l.budgetMaxLakhs * 100000), 0);
 
   return (
     <div className="flex min-h-screen bg-slateDark-950 text-slate-100 font-sans">
@@ -51,7 +58,7 @@ export default function Home() {
         <Header
           selectedCity={selectedCity}
           setSelectedCity={setSelectedCity}
-          onOpenAddLead={() => setIsAddLeadOpen(true)}
+          onOpenAddLead={handleOpenAddLead}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
         />
@@ -68,9 +75,14 @@ export default function Home() {
                 closedValueINR={closedValueINR}
               />
 
-              <ChartsSection />
+              <ChartsSection leads={leads} closedDealsValueCr={closedValueINR / 10000000} />
 
-              <ActivityFeed />
+              <ActivityFeed
+                activities={activities}
+                leads={leads}
+                onOpenScheduleVisit={handleOpenScheduleVisit}
+                onOpenAddLead={handleOpenAddLead}
+              />
             </div>
           )}
 

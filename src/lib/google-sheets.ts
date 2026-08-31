@@ -1,13 +1,13 @@
 import { google } from 'googleapis';
 import { getGoogleAuth } from './google-auth';
-import { Lead, Activity, MOCK_LEADS, MOCK_ACTIVITIES } from './mock-data';
+import { Lead, Activity } from './mock-data';
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 
 export async function fetchLeadsFromSheet(): Promise<Lead[]> {
   const auth = getGoogleAuth();
   if (!auth || !SHEET_ID) {
-    return MOCK_LEADS;
+    return [];
   }
 
   try {
@@ -19,7 +19,7 @@ export async function fetchLeadsFromSheet(): Promise<Lead[]> {
 
     const rows = response.data.values;
     if (!rows || rows.length === 0) {
-      return MOCK_LEADS;
+      return [];
     }
 
     return rows.map((row, index) => ({
@@ -37,8 +37,8 @@ export async function fetchLeadsFromSheet(): Promise<Lead[]> {
       createdAt: new Date().toISOString(),
     }));
   } catch (error) {
-    console.error('Error fetching leads from Google Sheet, falling back to mock data:', error);
-    return MOCK_LEADS;
+    console.error('Error fetching leads from Google Sheet:', error);
+    return [];
   }
 }
 
@@ -117,7 +117,7 @@ export async function updateLeadStageInSheet(leadId: string, newStage: string): 
 export async function fetchActivitiesFromSheet(): Promise<Activity[]> {
   const auth = getGoogleAuth();
   if (!auth || !SHEET_ID) {
-    return MOCK_ACTIVITIES;
+    return [];
   }
 
   try {
@@ -129,7 +129,7 @@ export async function fetchActivitiesFromSheet(): Promise<Activity[]> {
 
     const rows = response.data.values;
     if (!rows || rows.length === 0) {
-      return MOCK_ACTIVITIES;
+      return [];
     }
 
     return rows.map((row, index) => ({
@@ -141,8 +141,8 @@ export async function fetchActivitiesFromSheet(): Promise<Activity[]> {
       isCompleted: row[5] === 'TRUE' || row[5] === 'true',
     }));
   } catch (error) {
-    console.error('Error fetching activities from Google Sheet, falling back to mock:', error);
-    return MOCK_ACTIVITIES;
+    console.error('Error fetching activities from Google Sheet:', error);
+    return [];
   }
 }
 

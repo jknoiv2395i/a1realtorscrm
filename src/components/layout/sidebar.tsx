@@ -96,14 +96,12 @@ export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
       <div className="p-4 border-t border-slate-800/80">
         <div className="flex items-center justify-between p-2 rounded-lg bg-slate-800/30 hover:bg-slate-800/60 transition-colors">
           <div className="flex items-center gap-3">
-            <img
-              src="https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&auto=format&fit=crop&q=80"
-              alt="Rajesh Sharma"
-              className="w-9 h-9 rounded-full object-cover border border-gold-500/40"
-            />
+            <div className="w-9 h-9 rounded-full bg-gold-500/20 border border-gold-500/40 flex items-center justify-center text-gold-400 font-bold text-sm">
+              AB
+            </div>
             <div className="text-left">
-              <p className="text-xs font-semibold text-slate-100">Rajesh Sharma</p>
-              <p className="text-[10px] text-gold-400/90 font-medium">Head of Sales & Strategy</p>
+              <p className="text-xs font-semibold text-slate-100">Agency Broker</p>
+              <p className="text-[10px] text-gold-400/90 font-medium">Principal Administrator</p>
             </div>
           </div>
           <button className="text-slate-400 hover:text-rose-400 transition-colors p-1" title="Sign out">
