@@ -91,8 +91,14 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true, lead: formattedLead }, { status: 201 });
   } catch (error) {
-    console.error('API POST /api/leads Error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to create lead in database' }, { status: 500 });
+    console.error('Prisma Creation Error:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 }
+    );
   }
 }
 
