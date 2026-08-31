@@ -31,32 +31,56 @@ export function LeadModal({ onClose, onSave }: LeadModalProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.clientName || !formData.contactNumber) return;
+
+    // ── Explicit payload: never rely on Partial<Lead> spread ──────────────
+    const leadPayload = {
+      clientName:        (formData.clientName        || '').trim(),
+      contactNumber:     (formData.contactNumber     || '').trim(),
+      email:             (formData.email             || '').trim() || null,
+      budgetMinLakhs:    Number(formData.budgetMinLakhs)  || 75,
+      budgetMaxLakhs:    Number(formData.budgetMaxLakhs)  || 150,
+      preferredLocality: (formData.preferredLocality || 'Mumbai').trim(),
+      preferredType:     formData.preferredType      || 'BHK_2',
+      buyingIntent:      formData.buyingIntent       || 'SELF_USE',
+      stage:             formData.stage              || 'NEW_INQUIRY',
+      source:            (formData.source            || 'Website Inquiry').trim(),
+      notes:             (formData.notes             || '').trim() || null,
+    };
+
+    console.log('[LeadModal] Submitting lead payload:', leadPayload);
+
+    if (!leadPayload.clientName || !leadPayload.contactNumber) {
+      setErrorMessage('Client Name and Contact Number are required.');
+      return;
+    }
 
     setIsSubmitting(true);
     setErrorMessage('');
 
     try {
+      console.log('[LeadModal] Dispatching POST /api/leads ...');
       const res = await fetch('/api/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(leadPayload),
       });
 
+      console.log('[LeadModal] Server response status:', res.status);
       const data = await res.json();
+      console.log('[LeadModal] Server response body:', data);
 
-      if (res.status === 201 || data.success) {
-        if (data.lead) {
-          onSave(data.lead);
-        }
-        router.refresh();
-        onClose();
-      } else {
-        setErrorMessage(data.error || 'Failed to create lead in database');
+      if (!res.ok) {
+        throw new Error(data.error || `Server returned ${res.status}`);
       }
-    } catch (err) {
-      console.error('LeadModal POST Error:', err);
-      setErrorMessage('Failed to connect to database API');
+
+      if (data.success && data.lead) {
+        onSave(data.lead);
+      }
+      router.refresh();
+      onClose();
+    } catch (err: any) {
+      console.error('[LeadModal] Submission error details:', err);
+      setErrorMessage(err.message || 'Failed to connect to database API');
     } finally {
       setIsSubmitting(false);
     }
