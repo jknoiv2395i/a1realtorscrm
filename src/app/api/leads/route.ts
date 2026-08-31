@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { appendLeadToSheet, updateLeadStageInSheet } from '@/lib/google-sheets';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const dbLeads = await prisma.lead.findMany({
