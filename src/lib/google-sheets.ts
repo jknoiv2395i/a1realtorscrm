@@ -30,6 +30,7 @@ export async function fetchLeadsFromSheet(): Promise<Lead[]> {
       budgetMaxLakhs: parseFloat(row[4]) || 100,
       preferredLocality: row[5] || 'Mumbai',
       preferredType: row[6] || 'BHK_2',
+      buyingIntent: (row[10] || 'SELF_USE') as Lead['buyingIntent'],
       stage: (row[7] || 'NEW_INQUIRY') as Lead['stage'],
       notes: row[8] || '',
       source: row[9] || 'Website',
