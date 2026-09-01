@@ -51,6 +51,8 @@ export function LeadPipeline({
     loadLeads();
   }, []);
 
+  const [errorToast, setErrorToast] = useState<string | null>(null);
+
   // Handle stage change with optimistic UI update and PATCH persistence
   const handleStageChange = async (leadId: string, currentStage: string, direction: 'next' | 'prev') => {
     const stageOrder = PIPELINE_STAGES.map((s) => s.id);
@@ -73,6 +75,7 @@ export function LeadPipeline({
     );
 
     setUpdatingLeadId(leadId);
+    setErrorToast(null);
 
     try {
       const res = await fetch('/api/leads', {
@@ -87,13 +90,16 @@ export function LeadPipeline({
         setLeads((prev) =>
           prev.map((l) => (l.id === leadId ? { ...l, stage: currentStage as Lead['stage'] } : l))
         );
-        console.error('Failed to update stage:', data.error);
+        const errDesc = data.error || 'Failed to persist stage transition to Supabase';
+        setErrorToast(errDesc);
+        console.error('Failed to update stage:', errDesc);
       }
-    } catch (err) {
+    } catch (err: any) {
       // Rollback on network failure
       setLeads((prev) =>
         prev.map((l) => (l.id === leadId ? { ...l, stage: currentStage as Lead['stage'] } : l))
       );
+      setErrorToast('Network error: Unable to reach database');
       console.error('Network error during stage update:', err);
     } finally {
       setUpdatingLeadId(null);
@@ -168,6 +174,18 @@ export function LeadPipeline({
           </button>
         </div>
       </div>
+
+      {errorToast && (
+        <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold flex items-center justify-between animate-in fade-in duration-200">
+          <span>{errorToast}</span>
+          <button
+            onClick={() => setErrorToast(null)}
+            className="text-rose-400 hover:text-white font-bold text-xs"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Kanban Matrix Row View */}
       {viewMode === 'kanban' ? (

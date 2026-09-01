@@ -120,9 +120,15 @@ export async function PATCH(req: Request) {
       console.warn('Google Sheets stage update skipped:', sheetErr);
     }
 
-    return NextResponse.json({ success: true, leadId, stage, lead: updatedLead });
+    return NextResponse.json({ success: true, lead: updatedLead });
   } catch (error) {
     console.error('API PATCH /api/leads Error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to update lead stage' }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 }
+    );
   }
 }
