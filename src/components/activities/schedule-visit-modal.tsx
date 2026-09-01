@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Activity } from '@/lib/mock-data';
-import { X, Calendar, Clock, MapPin, User, MessageSquare, PhoneCall, Check } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Activity, Lead } from '@/lib/mock-data';
+import { X, Calendar, Clock, MapPin, User, MessageSquare, PhoneCall, Loader2 } from 'lucide-react';
 
 interface ScheduleVisitModalProps {
   onClose: () => void;
@@ -10,35 +10,77 @@ interface ScheduleVisitModalProps {
 }
 
 export function ScheduleVisitModal({ onClose, onSave }: ScheduleVisitModalProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [isLoadingLeads, setIsLoadingLeads] = useState(true);
+
   const [formData, setFormData] = useState({
     type: 'SITE_VISIT' as Activity['type'],
     title: '',
-    clientName: '',
+    leadId: '',
     locality: '',
     date: new Date().toISOString().split('T')[0],
     time: '11:00',
     description: '',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    async function fetchLeads() {
+      try {
+        const res = await fetch('/api/leads');
+        const data = await res.json();
+        if (data.success && data.leads) {
+          setLeads(data.leads);
+          if (data.leads.length > 0) {
+            setFormData((prev) => ({ ...prev, leadId: data.leads[0].id }));
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load leads for modal:', err);
+      } finally {
+        setIsLoadingLeads(false);
+      }
+    }
+    fetchLeads();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title || !formData.clientName) return;
+    if (!formData.title) return;
+
+    setIsSubmitting(true);
+    setErrorMessage('');
 
     const scheduledAt = `${formData.date}T${formData.time}:00`;
 
-    const newActivity: Activity = {
-      id: `act-${Date.now()}`,
-      type: formData.type,
-      title: formData.title,
-      clientName: formData.clientName,
-      locality: formData.locality || 'Prime Locality',
-      scheduledAt,
-      description: formData.description || 'Property inspection & broker walkthrough with buyer family.',
-      isCompleted: false,
-    };
+    try {
+      const res = await fetch('/api/activities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: formData.type,
+          title: formData.title,
+          leadId: formData.leadId || undefined,
+          scheduledAt,
+          description: formData.description || 'Property inspection & broker walkthrough with buyer family.',
+        }),
+      });
 
-    onSave(newActivity);
-    onClose();
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to save appointment in database');
+      }
+
+      onSave(data.activity);
+      onClose();
+    } catch (err: any) {
+      console.error('ScheduleVisitModal Error:', err);
+      setErrorMessage(err.message || 'Error connecting to database');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -56,6 +98,12 @@ export function ScheduleVisitModal({ onClose, onSave }: ScheduleVisitModalProps)
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {errorMessage && (
+          <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold">
+            {errorMessage}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div>
@@ -88,7 +136,7 @@ export function ScheduleVisitModal({ onClose, onSave }: ScheduleVisitModalProps)
           </div>
 
           <div>
-            <label className="block text-slate-400 font-semibold mb-1">Title / Property Mandatory Name *</label>
+            <label className="block text-slate-400 font-semibold mb-1">Title / Property Name *</label>
             <input
               type="text"
               required
@@ -101,19 +149,29 @@ export function ScheduleVisitModal({ onClose, onSave }: ScheduleVisitModalProps)
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-slate-400 font-semibold mb-1">Client Full Name *</label>
-              <input
-                type="text"
-                required
-                value={formData.clientName}
-                onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
-                placeholder="e.g. Aarav Singhania"
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-slate-100 focus:outline-none focus:border-gold-500"
-              />
+              <label className="block text-slate-400 font-semibold mb-1">Select Client / Lead</label>
+              {isLoadingLeads ? (
+                <div className="flex items-center gap-2 text-slate-500 p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading leads...
+                </div>
+              ) : (
+                <select
+                  value={formData.leadId}
+                  onChange={(e) => setFormData({ ...formData, leadId: e.target.value })}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-slate-100 focus:outline-none focus:border-gold-500"
+                >
+                  <option value="">-- General / Unlinked --</option>
+                  {leads.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.clientName} ({l.contactNumber})
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div>
-              <label className="block text-slate-400 font-semibold mb-1">Property Locality / Area</label>
+              <label className="block text-slate-400 font-semibold mb-1">Locality / Area</label>
               <input
                 type="text"
                 value={formData.locality}
@@ -163,15 +221,24 @@ export function ScheduleVisitModal({ onClose, onSave }: ScheduleVisitModalProps)
             <button
               type="button"
               onClick={onClose}
+              disabled={isSubmitting}
               className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-lg bg-gold-500 text-slateDark-950 font-bold hover:bg-gold-400 transition-colors shadow-lg"
+              disabled={isSubmitting}
+              className="flex items-center gap-2 px-5 py-2 rounded-lg bg-gold-500 text-slateDark-950 font-bold hover:bg-gold-400 transition-colors shadow-lg disabled:opacity-50"
             >
-              Confirm & Schedule Visit
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Saving to Supabase...</span>
+                </>
+              ) : (
+                <span>Confirm & Schedule Visit</span>
+              )}
             </button>
           </div>
         </form>

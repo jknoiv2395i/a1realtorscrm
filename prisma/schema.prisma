@@ -86,11 +86,11 @@ model Deal {
   createdAt      DateTime  @default(now())
 
   leadId     String
-  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  propertyId String
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  lead       Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  propertyId String?
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
   brokerId   String?
-  broker     User?    @relation(fields: [brokerId], references: [id])
+  broker     User?     @relation(fields: [brokerId], references: [id])
 }
 
 model Activity {

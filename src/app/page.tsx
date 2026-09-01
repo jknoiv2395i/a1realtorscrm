@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { SummaryCards } from '@/components/dashboard/summary-cards';
@@ -9,6 +9,7 @@ import { ActivityFeed } from '@/components/dashboard/activity-feed';
 import { LeadPipeline } from '@/components/leads/lead-pipeline';
 import { IndianTaxCalculator } from '@/components/compliance/indian-tax-calculator';
 import { ActivitiesView } from '@/components/activities/activities-view';
+import { PropertyInventory } from '@/components/inventory/property-inventory';
 import { Property, Activity, Lead } from '@/lib/mock-data';
 
 export default function Home() {
@@ -16,14 +17,39 @@ export default function Home() {
   const [selectedCity, setSelectedCity] = useState<string>('All India');
   const [searchQuery, setSearchQuery] = useState<string>('');
   
-  // Central interactive state initialized empty for clean production launch
+  // Live database state synced from Supabase APIs
   const [properties, setProperties] = useState<Property[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Modal open states
   const [isAddLeadOpen, setIsAddLeadOpen] = useState<boolean>(false);
   const [isScheduleVisitOpen, setIsScheduleVisitOpen] = useState<boolean>(false);
+  const [isAddPropertyOpen, setIsAddPropertyOpen] = useState<boolean>(false);
+
+  // Initial database sync on mount
+  useEffect(() => {
+    async function syncDatabaseData() {
+      try {
+        setIsLoading(true);
+        const [leadsRes, activitiesRes, propertiesRes] = await Promise.all([
+          fetch('/api/leads').then((r) => r.json()),
+          fetch('/api/activities').then((r) => r.json()),
+          fetch('/api/properties').then((r) => r.json()),
+        ]);
+
+        if (leadsRes.success && leadsRes.leads) setLeads(leadsRes.leads);
+        if (activitiesRes.success && activitiesRes.activities) setActivities(activitiesRes.activities);
+        if (propertiesRes.success && propertiesRes.properties) setProperties(propertiesRes.properties);
+      } catch (err) {
+        console.error('Failed to sync live database state on mount:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    syncDatabaseData();
+  }, []);
 
   const handleAddActivity = (newAct: Activity) => {
     setActivities((prev) => [newAct, ...prev]);
@@ -39,8 +65,8 @@ export default function Home() {
     setIsAddLeadOpen(true);
   };
 
-  // Compute live portfolio metrics dynamically from state
-  const totalPortfolioValueINR = properties.reduce((acc, p) => acc + p.priceInRupees, 0);
+  // Compute live portfolio metrics dynamically from database state
+  const totalPortfolioValueINR = properties.reduce((acc, p) => acc + (p.priceInRupees || (p.priceInLakhs * 100000)), 0);
   const activeLeadsCount = leads.length;
   const siteVisitsCount = activities.filter((a) => a.type === 'SITE_VISIT').length;
   const closedDeals = leads.filter((l) => l.stage === 'CLOSED_WON');
@@ -92,6 +118,19 @@ export default function Home() {
                 searchQuery={searchQuery}
                 isAddLeadOpen={isAddLeadOpen}
                 setIsAddLeadOpen={setIsAddLeadOpen}
+              />
+            </div>
+          )}
+
+          {activeTab === 'inventory' && (
+            <div className="animate-in fade-in duration-300">
+              <PropertyInventory
+                properties={properties}
+                onAddProperty={(newP) => setProperties((prev) => [newP, ...prev])}
+                isAddPropertyOpen={isAddPropertyOpen}
+                setIsAddPropertyOpen={setIsAddPropertyOpen}
+                searchQuery={searchQuery}
+                selectedCity={selectedCity}
               />
             </div>
           )}
