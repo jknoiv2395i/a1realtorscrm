@@ -69,7 +69,7 @@ export default function Home() {
   const totalPortfolioValueINR = properties.reduce((acc, p) => acc + (p.priceInRupees || (p.priceInLakhs * 100000)), 0);
   const activeLeadsCount = leads.length;
   const siteVisitsCount = activities.filter((a) => a.type === 'SITE_VISIT').length;
-  const closedDeals = leads.filter((l) => l.stage === 'CLOSED_WON');
+  const closedDeals = leads.filter((l) => l.stage === 'CLOSED_WON' || l.stage === 'TOKEN_PAID');
   const closedDealsCount = closedDeals.length;
   const closedValueINR = closedDeals.reduce((acc, l) => acc + (l.budgetMaxLakhs * 100000), 0);
 

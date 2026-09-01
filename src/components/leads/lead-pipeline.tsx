@@ -11,12 +11,9 @@ import {
   Plus, 
   User, 
   MapPin, 
-  Phone, 
   ArrowRight, 
-  Briefcase, 
-  TrendingUp, 
-  CheckCircle2,
-  CalendarCheck
+  ArrowLeft,
+  Loader2
 } from 'lucide-react';
 
 interface LeadPipelineProps {
@@ -32,17 +29,17 @@ export function LeadPipeline({
 }: LeadPipelineProps) {
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [updatingLeadId, setUpdatingLeadId] = useState<string | null>(null);
 
-  // Fetch leads from Google Sheets / API
+  // Fetch leads from Supabase API
   useEffect(() => {
     async function loadLeads() {
       try {
         setIsLoading(true);
         const res = await fetch('/api/leads');
         const data = await res.json();
-        if (data.success && data.leads && data.leads.length > 0) {
+        if (data.success && data.leads) {
           setLeads(data.leads);
         }
       } catch (err) {
@@ -54,45 +51,57 @@ export function LeadPipeline({
     loadLeads();
   }, []);
 
-  const handleDragStart = (e: React.DragEvent, leadId: string) => {
-    e.dataTransfer.setData('leadId', leadId);
-  };
+  // Handle stage change with optimistic UI update and PATCH persistence
+  const handleStageChange = async (leadId: string, currentStage: string, direction: 'next' | 'prev') => {
+    const stageOrder = PIPELINE_STAGES.map((s) => s.id);
+    const currentIndex = stageOrder.indexOf(currentStage);
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
+    let targetIndex = currentIndex;
+    if (direction === 'next' && currentIndex < stageOrder.length - 1) {
+      targetIndex = currentIndex + 1;
+    } else if (direction === 'prev' && currentIndex > 0) {
+      targetIndex = currentIndex - 1;
+    }
 
-  const handleDrop = async (e: React.DragEvent, targetStage: Lead['stage']) => {
-    e.preventDefault();
-    const leadId = e.dataTransfer.getData('leadId');
-    if (!leadId) return;
+    if (targetIndex === currentIndex) return;
 
+    const newStage = stageOrder[targetIndex] as Lead['stage'];
+
+    // Optimistic UI update
     setLeads((prev) =>
-      prev.map((l) => (l.id === leadId ? { ...l, stage: targetStage } : l))
+      prev.map((l) => (l.id === leadId ? { ...l, stage: newStage } : l))
     );
 
+    setUpdatingLeadId(leadId);
+
     try {
-      await fetch('/api/leads', {
+      const res = await fetch('/api/leads', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leadId, stage: targetStage }),
+        body: JSON.stringify({ leadId, stage: newStage }),
       });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        // Rollback on error
+        setLeads((prev) =>
+          prev.map((l) => (l.id === leadId ? { ...l, stage: currentStage as Lead['stage'] } : l))
+        );
+        console.error('Failed to update stage:', data.error);
+      }
     } catch (err) {
-      console.error('Failed to update stage on Google Sheet:', err);
+      // Rollback on network failure
+      setLeads((prev) =>
+        prev.map((l) => (l.id === leadId ? { ...l, stage: currentStage as Lead['stage'] } : l))
+      );
+      console.error('Network error during stage update:', err);
+    } finally {
+      setUpdatingLeadId(null);
     }
   };
 
-  const handleAddLead = async (newLead: Lead) => {
-    setLeads((prev) => [newLead, ...prev]);
-    try {
-      await fetch('/api/leads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newLead),
-      });
-    } catch (err) {
-      console.error('Failed to post lead to Google Sheet:', err);
-    }
+  const handleAddNewLead = (savedLead: Lead) => {
+    setLeads((prev) => [savedLead, ...prev.filter((l) => l.id !== savedLead.id)]);
   };
 
   // Filter leads by search query
@@ -106,21 +115,12 @@ export function LeadPipeline({
     );
   });
 
-  // Handle stage change (Simulating drag or quick stage bump)
-  const handleMoveStage = async (leadId: string, currentStage: string) => {
-    const stageOrder = PIPELINE_STAGES.map((s) => s.id);
-    const currentIndex = stageOrder.indexOf(currentStage);
-    if (currentIndex < stageOrder.length - 1) {
-      const nextStage = stageOrder[currentIndex + 1] as Lead['stage'];
-      setLeads((prev) =>
-        prev.map((l) => (l.id === leadId ? { ...l, stage: nextStage } : l))
-      );
-    }
-  };
-
-  const handleAddNewLead = (savedLead: Lead) => {
-    setLeads((prev) => [savedLead, ...prev.filter((l) => l.id !== savedLead.id)]);
-  };
+  // Sort leads globally by creation date descending
+  const sortedLeads = [...filteredLeads].sort((a, b) => {
+    const timeA = new Date(a.createdAt).getTime();
+    const timeB = new Date(b.createdAt).getTime();
+    return timeB - timeA;
+  });
 
   return (
     <div className="space-y-6">
@@ -129,10 +129,10 @@ export function LeadPipeline({
         <div>
           <div className="flex items-center gap-2">
             <Kanban className="w-5 h-5 text-gold-400" />
-            <h2 className="text-xl font-black text-slate-100">Buyer Lead Pipeline & Conversion Board</h2>
+            <h2 className="text-xl font-black text-slate-100">Buyer Lead Pipeline & Conversion Matrix</h2>
           </div>
           <p className="text-xs text-slate-400 mt-0.5">
-            Track inquiries across 6 Indian real estate purchase stages
+            Fixed row-matrix layout ordered by creation date with bi-directional stage controls & Supabase sync
           </p>
         </div>
 
@@ -146,7 +146,7 @@ export function LeadPipeline({
               }`}
             >
               <Kanban className="w-3.5 h-3.5" />
-              <span>Kanban Board</span>
+              <span>Matrix Kanban</span>
             </button>
             <button
               onClick={() => setViewMode('table')}
@@ -169,64 +169,96 @@ export function LeadPipeline({
         </div>
       </div>
 
-      {/* Kanban View */}
+      {/* Kanban Matrix Row View */}
       {viewMode === 'kanban' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 overflow-x-auto pb-4">
-          {PIPELINE_STAGES.map((stage) => {
-            const stageLeads = filteredLeads.filter((l) => l.stage === stage.id);
-            return (
-              <div
-                key={stage.id}
-                className="bg-slateDark-900/80 border border-slate-800/80 rounded-2xl p-3 flex flex-col justify-between min-h-[500px] shadow-lg"
-              >
-                {/* Stage Header */}
-                <div>
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-800/80 mb-3">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm">{stage.icon}</span>
-                      <h3 className="text-xs font-extrabold text-slate-200 truncate">{stage.label}</h3>
-                    </div>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${stage.badgeBg}`}>
-                      {stageLeads.length}
-                    </span>
+        <div className="space-y-4">
+          {/* Stage Headers Column Row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 sticky top-0 z-10 bg-slateDark-950/90 backdrop-blur-md pb-2">
+            {PIPELINE_STAGES.map((stage) => {
+              const stageCount = sortedLeads.filter((l) => l.stage === stage.id).length;
+              return (
+                <div
+                  key={stage.id}
+                  className="bg-slateDark-900 border border-slate-800 rounded-xl p-3 flex items-center justify-between shadow-md"
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-sm shrink-0">{stage.icon}</span>
+                    <h3 className="text-xs font-extrabold text-slate-200 truncate">{stage.label}</h3>
                   </div>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${stage.badgeBg}`}>
+                    {stageCount}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
 
-                  {/* Stage Leads Column Cards */}
-                  <div className="space-y-3">
-                    {stageLeads.map((lead) => (
+          {/* Matrix Rows (Sorted Globally by Creation Date) */}
+          {sortedLeads.length > 0 ? (
+            <div className="space-y-3">
+              {sortedLeads.map((lead, rowIndex) => (
+                <div
+                  key={lead.id}
+                  className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 p-2 rounded-2xl bg-slateDark-900/60 border border-slate-800/60 hover:border-slate-700/80 transition-all shadow-lg"
+                >
+                  {PIPELINE_STAGES.map((stage, colIndex) => {
+                    const isOccupied = lead.stage === stage.id;
+                    const isFirstStage = colIndex === 0;
+                    const isLastStage = colIndex === PIPELINE_STAGES.length - 1;
+                    const isUpdating = updatingLeadId === lead.id;
+
+                    if (!isOccupied) {
+                      return (
+                        <div
+                          key={`${lead.id}-${stage.id}`}
+                          className="h-full min-h-[120px] rounded-xl border border-dashed border-slate-800/40 bg-slate-900/20 flex items-center justify-center p-2"
+                        >
+                          <span className="text-[10px] text-slate-700/60 font-mono">Row #{rowIndex + 1}</span>
+                        </div>
+                      );
+                    }
+
+                    return (
                       <div
                         key={lead.id}
-                        className="p-3.5 rounded-xl bg-slate-800/50 border border-slate-700/50 hover:border-gold-500/40 transition-all duration-200 shadow-md group relative space-y-2"
+                        className="p-3.5 rounded-xl bg-slate-800/80 border border-gold-500/40 shadow-xl space-y-2.5 relative flex flex-col justify-between hover:border-gold-400 transition-all"
                       >
-                        <div className="flex items-start justify-between">
-                          <h4 className="text-xs font-bold text-slate-100 group-hover:text-gold-400 transition-colors">
-                            {lead.clientName}
-                          </h4>
-                          <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase ${
-                            lead.buyingIntent === 'INVESTMENT' ? 'bg-indigo-500/20 text-indigo-300' : 'bg-emerald-500/20 text-emerald-300'
-                          }`}>
-                            {lead.buyingIntent}
-                          </span>
-                        </div>
+                        <div className="space-y-1.5">
+                          <div className="flex items-start justify-between gap-1">
+                            <span className="text-[9px] font-mono text-gold-400 font-extrabold">#{rowIndex + 1}</span>
+                            <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase ${
+                              lead.buyingIntent === 'INVESTMENT' ? 'bg-indigo-500/20 text-indigo-300' : 'bg-emerald-500/20 text-emerald-300'
+                            }`}>
+                              {lead.buyingIntent}
+                            </span>
+                          </div>
 
-                        <p className="text-[11px] font-bold text-gold-400">
-                          {formatPriceInLakhs(lead.budgetMinLakhs)} - {formatPriceInLakhs(lead.budgetMaxLakhs)}
-                        </p>
+                          <h4 className="text-xs font-bold text-slate-100">{lead.clientName}</h4>
 
-                        <div className="text-[10px] text-slate-400 space-y-0.5">
-                          <p className="flex items-center gap-1">
-                            <MapPin className="w-3 h-3 text-gold-400/80" />
-                            {lead.preferredLocality}
+                          <p className="text-[11px] font-bold text-gold-400">
+                            {formatPriceInLakhs(lead.budgetMinLakhs)} - {formatPriceInLakhs(lead.budgetMaxLakhs)}
                           </p>
-                          {lead.propertyTitle && (
-                            <p className="text-slate-300 line-clamp-1 italic">
-                              Mandate: {lead.propertyTitle}
+
+                          <div className="text-[10px] text-slate-400 space-y-0.5">
+                            <p className="flex items-center gap-1">
+                              <MapPin className="w-3 h-3 text-gold-400/80 shrink-0" />
+                              <span className="truncate">{lead.preferredLocality}</span>
                             </p>
-                          )}
+                          </div>
                         </div>
 
-                        {/* Action Bar */}
-                        <div className="pt-2 border-t border-slate-700/40 flex items-center justify-between">
+                        {/* Stage Controls & WhatsApp Action Bar */}
+                        <div className="pt-2 border-t border-slate-700/60 flex items-center justify-between gap-1">
+                          <button
+                            disabled={isFirstStage || isUpdating}
+                            onClick={() => handleStageChange(lead.id, lead.stage, 'prev')}
+                            className="flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-1 rounded bg-slate-700/60 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors disabled:opacity-30 disabled:hover:bg-slate-700/60 disabled:hover:text-slate-300"
+                            title="Move to Previous Stage"
+                          >
+                            <ArrowLeft className="w-3 h-3" />
+                            <span>Prev</span>
+                          </button>
+
                           <a
                             href={generateWhatsAppLink(lead.contactNumber, lead.clientName, lead.propertyTitle)}
                             target="_blank"
@@ -237,30 +269,29 @@ export function LeadPipeline({
                             <MessageSquare className="w-3.5 h-3.5" />
                           </a>
 
-                          {stage.id !== 'CLOSED_WON' && (
-                            <button
-                              onClick={() => handleMoveStage(lead.id, lead.stage)}
-                              className="flex items-center gap-1 text-[10px] font-bold text-gold-400 hover:text-white transition-colors"
-                            >
-                              <span>Next Stage</span>
-                              <ArrowRight className="w-3 h-3" />
-                            </button>
-                          )}
+                          <button
+                            disabled={isLastStage || isUpdating}
+                            onClick={() => handleStageChange(lead.id, lead.stage, 'next')}
+                            className="flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-1 rounded bg-gold-500/20 text-gold-400 hover:bg-gold-500 hover:text-slateDark-950 transition-colors disabled:opacity-30 disabled:hover:bg-gold-500/20 disabled:hover:text-gold-400"
+                            title="Move to Next Stage"
+                          >
+                            <span>Next</span>
+                            <ArrowRight className="w-3 h-3" />
+                          </button>
                         </div>
                       </div>
-                    ))}
-
-                    {stageLeads.length === 0 && (
-                      <div className="py-8 px-2 text-center border border-dashed border-slate-800 rounded-xl space-y-2">
-                        <p className="text-[11px] font-semibold text-slate-400">No leads in stage</p>
-                        <p className="text-[10px] text-slate-500">Click &apos;+ Add Lead&apos; to create an inquiry</p>
-                      </div>
-                    )}
-                  </div>
+                    );
+                  })}
                 </div>
-              </div>
-            );
-          })}
+              ))}
+            </div>
+          ) : (
+            <div className="p-12 text-center border border-dashed border-slate-800 rounded-2xl bg-slateDark-900/50 space-y-3">
+              <Kanban className="w-10 h-10 text-slate-600 mx-auto" />
+              <h3 className="text-sm font-bold text-slate-200">No buyer leads available</h3>
+              <p className="text-xs text-slate-400">Click &apos;+ Add Lead&apos; above to record your first prospect.</p>
+            </div>
+          )}
         </div>
       ) : (
         /* Table View */
@@ -269,6 +300,7 @@ export function LeadPipeline({
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-800/80 text-slate-300 uppercase font-semibold text-[10px] tracking-wider border-b border-slate-700/80">
                 <tr>
+                  <th className="p-4">#</th>
                   <th className="p-4">Client Name</th>
                   <th className="p-4">WhatsApp Contact</th>
                   <th className="p-4">Budget Range</th>
@@ -279,9 +311,10 @@ export function LeadPipeline({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 text-slate-200">
-                {filteredLeads.length > 0 ? (
-                  filteredLeads.map((lead) => (
+                {sortedLeads.length > 0 ? (
+                  sortedLeads.map((lead, idx) => (
                     <tr key={lead.id} className="hover:bg-slate-800/40 transition-colors">
+                      <td className="p-4 font-mono text-slate-500 font-bold">{idx + 1}</td>
                       <td className="p-4 font-bold text-slate-100">{lead.clientName}</td>
                       <td className="p-4 font-mono text-slate-300">{lead.contactNumber}</td>
                       <td className="p-4 font-extrabold text-gold-400">
@@ -313,7 +346,7 @@ export function LeadPipeline({
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={7} className="p-12 text-center text-slate-400">
+                    <td colSpan={8} className="p-12 text-center text-slate-400">
                       <p className="text-sm font-bold text-slate-300">No buyer inquiries found</p>
                       <p className="text-xs text-slate-500 mt-1">Click &apos;+ Add Lead&apos; above to record your first client prospect.</p>
                     </td>
